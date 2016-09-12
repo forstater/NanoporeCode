@@ -1,20 +1,22 @@
-function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts, probs)
+function [mod_inds, mod_type, lvl_accum, P, ks] = align_fb(model_prediction, model_stds, lvls, dts, dboff, probs)
 
-    dboff = 80;
+    if nargin < 5
+        dboff = 100;
+    end
     
-    if nargin < 4
+    if nargin < 6
         % so first we need observation (emission) probabilities
         % assuming constant stddev for each level
-        obsstd = 2.0; % pA
-        stayprob = 0.2;
+        % obsstd = 2.0; % pA
+        stayprob = 0.001;
         fwdprob = 1;
-        backprob = 0.05;
-        skipprob = 0.1;
+        backprob = 0.0001;
+        skipprob = 0.01;
 
         % other transition probs
-        noiseprob = 0.1;
-        deepprob = 0;
-        deepdeep = 0;
+        noiseprob = 0.001;
+        deepprob = 0.001;
+        deepdeep = 0.01;
     else
         obsstd = probs(1);
         stayprob = probs(2);
@@ -38,16 +40,24 @@ function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts,
     N = numel(lvls);
     
     [Nmat,Mmat] = meshgrid(lvls,model_prediction);
+    stds = repmat(model_stds',numel(lvls),1)'; % orientation of this matrix has been checked and is correct
     
-    
-    E_model = normpdf(Mmat,Nmat,obsstd);
+    %E_model = normpdf(Mmat,Nmat,obsstd);
+    %E_model = normpdf(Mmat,Nmat,min(2,stds));% + 0.001*lorentzianpdf(Mmat,Nmat,stds/2).^10;
+    E_model = normpdf(Mmat,Nmat,0.5+stds);
+    %E_model = lorentzianpdf(Mmat,Nmat,stds/2).^10;
     % use exponential constant for prob of being random noise
-    E_noise = exppdf(repmat(dts',[M,1]),0.001);%1+0*E_model;
-    % and add 50 pA for deep blockages
-    E_deep = normpdf(Mmat,Nmat+50,obsstd);
+    E_noise = exppdf(repmat(dts',[M,1]),0.0001);%1+0*E_model;
+    %E_noise = exppdf(repmat(dts',[M,1]),0.001).*E_model;
+    %E_noise = exppdf(repmat(dts',[M,1]),median(dts)/log(2)/200);
+    % and add dboff pA for deep blockages
+    %E_deep = normpdf(Mmat,Nmat+dboff,obsstd);
+    %E_deep = ( normpdf(Mmat,Nmat+dboff,min(2,stds))) + 1e-5*exppdf(Nmat,5) )/(1+1e-5);
+    E_deep = lorentzianpdf(Mmat,Nmat+dboff,stds/2).^8;%.*E_model;
     
     % put them all into one emission matrix
     E = [E_model;E_noise;E_deep];
+    E = E ./ repmat(sum(E),[size(E,1) 1]);
     % do log-likelihoods
     E = log(E);
     
@@ -56,6 +66,8 @@ function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts,
     dn = 5;
     
     dprobs = [backprob*skipprob.^(dn-1:-1:0) stayprob fwdprob*skipprob.^(0:dn-1)];
+    %dprobs = [(backprob*skipprob).^(5*((dn-1):-1:0)) stayprob (fwdprob*skipprob).^(5*(0:dn-1))];
+    %dprobs = [backprob*backprob.^(10*(dn-1):-10:0) stayprob fwdprob*skipprob.^(0:10:10*(dn-1))];
     T0 = zeros(M);
     for i=1:numel(dprobs)
         di = i-dn-1;
@@ -69,9 +81,9 @@ function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts,
     %   N->0,      N->N,   N->D;
     %   D->0,      D->N,   D->D]
     
-    T = [       T0,         noiseprob*TI,           deepprob*TI;
-                T0,                 0*TI,           deepprob*T0;
-                T0,         noiseprob*TI,           deepdeep*T0];
+    T = [       T0,         noiseprob*TI,           deepprob*T0;
+                T0,       noiseprob^2*TI,           deepprob*TI;
+                T0,         noiseprob*TI,           deepdeep*TI];
     
     % normalize each row to sum to 1
     Tn = sum(T,2);
@@ -83,7 +95,7 @@ function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts,
     % how do we set initial probabilities? dunno, exponentially decaying
     % at the start or something
     P = 0*E;
-    P(:,1) = E(:,1) - ((1:3*M)');
+    P(:,1) = E(:,1) - (2*(1:3*M)');
     P(:,1) = P(:,1) - log(sum(exp(P(:,1))));
     Pnorms = zeros(N,1);
     K = 0*E;
@@ -113,6 +125,14 @@ function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts,
         k = K(k,i);
     end
     
+%     % run forward trace
+%     ks = zeros(N,1);
+%     [~,k] = max(P(:,1));
+%     for i=1:N
+%         ks(i) = k;
+%         k = K(k,i);
+%     end
+    
     % so now ks is the state index of each seen level
     % kinds is the model index (which is state index modulo number of mod
     % levels)
@@ -123,10 +143,11 @@ function [mod_inds, mod_type, lvl_accum] = align_fb(model_prediction, lvls, dts,
     mod_type = 1 + floor((ks-1)/M);
     
     % create adjusted levels for deep blockages
-    lvls_adj = lvls;
-    lvls_adj(mod_type==3) = lvls_adj(mod_type==3)+dboff;
+%     lvls_adj = lvls;
+%     lvls_adj(mod_type==3) = lvls_adj(mod_type==3)+dboff;
 
-    lvl_accum = accumarray(kinds(mod_type~=2),lvls_adj(mod_type~=2),[M 1],@mean,nan);
+%     lvl_accum = accumarray(kinds(mod_type~=2),lvls_adj(mod_type~=2),[M 1],@mean,nan);
+    lvl_accum = accumarray(kinds(mod_type==1),lvls(mod_type==1),[M 1],@mean,nan);
     
     if nargout >= 1
         return

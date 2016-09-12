@@ -1,10 +1,8 @@
-function pv = pv_launch(s)
-    % PV_LAUNCH()
+function pv = pv_aligner_launch(s)
+    % PV_ALIGNER_LAUNCH()
     %   This is a 'launcher' file for PoreView. It is designed to start an
     %   instance of PoreView in a specified folder and to give it the 
     %   keyboard callback behavior you want.
-    
-    global fcurrentSigNoSpikes
     
     % this sets the default directory for File->Open
     if nargin < 1
@@ -54,24 +52,19 @@ function pv = pv_launch(s)
             switch strs{1}
                 case 'lp'
                     filtname = sprintf('Low-pass (%d Hz)', param);
-                    fsigs = arrayfun(@(x) x.addVirtualSignal(@(d) filt_lp(d,4,param),filtname), pv.data, 'UniformOutput', false);
-                    fsigs = fsigs{1};
+                    fsigs = pv.data.addVirtualSignal(@(d) filt_lp(d,4,param),filtname);
                 case 'lpb'
                     filtname = sprintf('Low-pass Bessel (%d Hz)', param);
-                    fsigs = arrayfun(@(x) x.addVirtualSignal(@(d) filt_lpb(d,4,param),filtname), pv.data, 'UniformOutput', false);
-                    fsigs = fsigs{1};
+                    fsigs = pv.data.addVirtualSignal(@(d) filt_lpb(d,4,param),filtname);
                 case 'hp'
                     filtname = sprintf('High-pass (%d Hz)', param);
-                    fsigs = arrayfun(@(x) x.addVirtualSignal(@(d) filt_hp(d,4,param),filtname), pv.data, 'UniformOutput', false);
-                    fsigs = fsigs{1};
+                    fsigs = pv.data.addVirtualSignal(@(d) filt_hp(d,4,param),filtname);
                 case 'med'
                     filtname = sprintf('Median (%d pts)', param);
-                    fsigs = arrayfun(@(x) x.addVirtualSignal(@(d) filt_med(d,param),filtname), pv.data, 'UniformOutput', false);
-                    fsigs = fsigs{1};
+                    fsigs = pv.data.addVirtualSignal(@(d) filt_med(d,param),filtname);
                 case 'band'
                     filtname = sprintf('Band-pass (%d Hz)', params);
-                    fsigs = arrayfun(@(x) x.addVirtualSignal(@(d) filt_band(d,4,params),filtname), pv.data, 'UniformOutput', false);
-                    fsigs = fsigs{1};
+                    fsigs = pv.data.addVirtualSignal(@(d) filt_band(d,4,params),filtname);
                 otherwise
                     return
             end            
@@ -80,7 +73,7 @@ function pv = pv_launch(s)
             % uh trust me on this one
             for i=1:numel(pv.psigs)
                 s = pv.psigs(i).sigs;
-                s(s<=pv.data(1).nsigs+1) = s(s<=pv.data(1).nsigs+1) + fsigs(1) - 2;
+                s(s<=pv.data.nsigs+1) = s(s<=pv.data.nsigs+1) + fsigs(1) - 2;
                 pv.psigs(i).sigs = s;
             end
             

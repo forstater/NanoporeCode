@@ -367,7 +367,7 @@ classdef SignalData < handle
                trange(2) = 0;
             end
             if (trange(1) > obj.tend)
-                trange(1) = obj.data.tend;
+                trange(1) = obj.tend;
             end
             if (trange(2) > obj.tend)
                 trange(2) = obj.tend;
@@ -624,7 +624,7 @@ classdef SignalData < handle
                     tmp = load(redfile,'red');
                     obj.datared = tmp.red;
                     obj.nred = size(obj.datared,1);
-                    fprintf('\nLoaded reduced data from %s_red.mat.\n',obj.filename);
+%                     fprintf('\nLoaded reduced data from %s_red.mat.\n',obj.filename);
                 end
             end
             

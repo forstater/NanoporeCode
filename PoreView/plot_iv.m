@@ -59,11 +59,11 @@ function [Vs, Is] = plot_iv(filename)
         %Vs = linspace(-200,200,sz(3))';
         Vs = (-200:5:200)';
         p1 = 41;
-        p2 = 61;
+        p2 = 51;
     else
         %Vs = linspace(200,-200,sz(3))';
         Vs = (200:-5:-200)';
-        p1 = 21;
+        p1 = 31;
         p2 = 41;
     end
     if isfield(h,'setVoltages')
@@ -106,6 +106,9 @@ function [Vs, Is] = plot_iv(filename)
     set(h,'Position',[100 500 600 500]) % size the figure
     set(gca,'FontSize',24)
     xlim([-200 200])
+    
+    assignin('base',['V_' filename(end-5:end-4)],Vs)
+    assignin('base',['I_' filename(end-5:end-4)],Is)
     
 %     hfig = figure('Name',sprintf('I-V Plot of %s',filename),'NumberTitle','off');
 %     
